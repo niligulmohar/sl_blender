@@ -70,50 +70,49 @@ import xml.sax, struct, os.path
 def sl_path_selected(filename):
     print "You chose the directory:", filename
     global regdict
-    regdict = {'sl_directory': filename}
-    Registry.SetKey('sl_blender', regdict, True)
+    regdict = {'sl_directory': filename, 'params': {}}
     start()
 
-######################################################################
-
-class SkeletonHandler(xml.sax.ContentHandler):
-    def __init__(self, armature):
-        self.armature = armature
-        self.bone_stack = []
-    def startElement(self, name, attrs):
-        if name == 'bone':
-            bone = Armature.Editbone()
-            bone.name = attrs['name']
-            if self.bone_stack:
-                bone.tail = self.bone_stack[-1].head
-            else:
-                bone.tail = Mathutils.Vector(0,0,0)
-            print type(bone)
-            self.armature.bones[attrs['name']] = bone
-            if self.bone_stack:
-                bone.parent = self.bone_stack[-1]
-            self.bone_stack.append(bone)
-    def endElement(self, name):
-        if name == 'bone':
-            self.bone_stack.pop()
-
-def build_armature():
-    obj = Blender.Object.New('Armature', 'AvatarSkeleton')
-    armature = Armature.New('Avatar')
-    obj.link(armature)
-    scene = Blender.Scene.GetCurrent()
-    scene.objects.link(obj)
-    armature.makeEditable()
-
-    sh = SkeletonHandler(armature)
-    parser = xml.sax.make_parser()
-    parser.setContentHandler(sh)
-    parser.parse(file(os.path.join(regdict['sl_directory'],
-                                   'character',
-                                   'avatar_skeleton.xml')))
-    sh.armature.update()
-    print "build_armature done!"
-    scene.update(0)
+# ######################################################################
+# 
+# class SkeletonHandler(xml.sax.ContentHandler):
+#     def __init__(self, armature):
+#         self.armature = armature
+#         self.bone_stack = []
+#     def startElement(self, name, attrs):
+#         if name == 'bone':
+#             bone = Armature.Editbone()
+#             bone.name = attrs['name']
+#             if self.bone_stack:
+#                 bone.tail = self.bone_stack[-1].head
+#             else:
+#                 bone.tail = Mathutils.Vector(0,0,0)
+#             print type(bone)
+#             self.armature.bones[attrs['name']] = bone
+#             if self.bone_stack:
+#                 bone.parent = self.bone_stack[-1]
+#             self.bone_stack.append(bone)
+#     def endElement(self, name):
+#         if name == 'bone':
+#             self.bone_stack.pop()
+# 
+# def build_armature():
+#     obj = Blender.Object.New('Armature', 'AvatarSkeleton')
+#     armature = Armature.New('Avatar')
+#     obj.link(armature)
+#     scene = Blender.Scene.GetCurrent()
+#     scene.objects.link(obj)
+#     armature.makeEditable()
+# 
+#     sh = SkeletonHandler(armature)
+#     parser = xml.sax.make_parser()
+#     parser.setContentHandler(sh)
+#     parser.parse(file(os.path.join(regdict['sl_directory'],
+#                                    'character',
+#                                    'avatar_skeleton.xml')))
+#     sh.armature.update()
+#     print "build_armature done!"
+#     scene.update(0)
 
 ######################################################################
 
@@ -138,6 +137,11 @@ class AvatarBuilder(object):
         self.scene.objects.link(self.avatar_object)
         self.avatar_object.makeParent(self.new_objects)
         self.new_objects.append(self.avatar_object)
+
+        sorted_params = regdict['params'].items()
+        sorted_params.sort()
+        for k, v in sorted_params:
+            self.avatar_object.addProperty('SL%d' % (k), v['default'])
 
         self.scene.objects.selected = self.new_objects
         self.scene.objects.active = self.avatar_object
@@ -242,6 +246,22 @@ class AvatarBuilder(object):
             elif name == 'skeleton':
                 self.parent.build_skeleton(attrs['file_name'])
             elif name == 'param':
+                if attrs.has_key('value_min'):
+                    value_min = float(attrs['value_min'])
+                else:
+                    value_min = 0.0
+                if attrs.has_key('value_max'):
+                    value_max = float(attrs['value_max'])
+                else:
+                    value_max = 1.0
+                if attrs.has_key('value_default'):
+                    value_default = float(attrs['value_default'])
+                else:
+                    value_default = 0.0
+                    
+                regdict['params'][int(attrs['id'])] = {'min': value_min,
+                                                       'max': value_max,
+                                                       'default': value_default}
                 if attrs.has_key('wearable'):
                     if attrs.has_key('edit_group'):
                         print "%s/%s/%s" % (attrs['wearable'],
@@ -296,8 +316,11 @@ class AvatarBuilder(object):
 ######################################################################
 
 def start():
+    if not regdict.has_key('params'):
+        regdict['params'] = {}
     #build_armature()
     AvatarBuilder()
+    Registry.SetKey('sl_blender', regdict, True)
 
 regdict = Registry.GetKey('sl_blender', True)
 
