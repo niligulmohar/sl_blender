@@ -65,7 +65,7 @@
 import Blender
 from Blender import Registry, Window, Mathutils
 
-import xml.sax, struct, os.path
+import xml.sax, struct, os, os.path
 
 def sl_path_selected(filename):
     print "You chose the directory:", filename
@@ -141,7 +141,16 @@ class AvatarBuilder(object):
         sorted_params = regdict['params'].items()
         sorted_params.sort()
         for k, v in sorted_params:
-            self.avatar_object.addProperty('SL%d' % (k), v['default'])
+            self.avatar_object.addProperty('param %d' % (k), v['default'])
+
+        archetype_file_name = os.path.join(regdict['sl_directory'],
+                                           'character',
+                                           'new archetype.xml')
+        if os.access(archetype_file_name, os.F_OK):
+            gh = self.LindenGenepoolHandler(self)
+            parser = xml.sax.make_parser()
+            parser.setContentHandler(gh)
+            parser.parse(file(archetype_file_name))
 
         self.scene.objects.selected = self.new_objects
         self.scene.objects.active = self.avatar_object
@@ -262,16 +271,16 @@ class AvatarBuilder(object):
                 regdict['params'][int(attrs['id'])] = {'min': value_min,
                                                        'max': value_max,
                                                        'default': value_default}
-                if attrs.has_key('wearable'):
-                    if attrs.has_key('edit_group'):
-                        print "%s/%s/%s" % (attrs['wearable'],
-                                            attrs['edit_group'],
-                                            attrs['name'])
-                    else:
-                        print "%s/%s" % (attrs['wearable'],
-                                         attrs['name'])
-                else:
-                    pass #print attrs['id'], attrs['name']
+                # if attrs.has_key('wearable'):
+                #     if attrs.has_key('edit_group'):
+                #         print "%s/%s/%s" % (attrs['wearable'],
+                #                             attrs['edit_group'],
+                #                             attrs['name'])
+                #     else:
+                #         print "%s/%s" % (attrs['wearable'],
+                #                          attrs['name'])
+                # else:
+                #     pass #print attrs['id'], attrs['name']
 
         def endElement(self, name):
             pass
@@ -312,6 +321,14 @@ class AvatarBuilder(object):
         def endElement(self, name):
             if name == 'bone':
                 self.bone_stack.pop()
+
+    class LindenGenepoolHandler(xml.sax.ContentHandler):
+        def __init__(self, parent):
+            self.parent = parent
+        def startElement(self, name, attrs):
+            if name == 'param':
+                self.parent.avatar_object.getProperty('param ' + attrs['id']).setData(float(attrs['value']))
+                print 'param ' + attrs['id'], float(attrs['value'])
 
 ######################################################################
 
